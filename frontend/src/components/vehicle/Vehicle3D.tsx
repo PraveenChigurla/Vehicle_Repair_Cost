@@ -8,7 +8,7 @@ import { buildParticles, buildPlatform, buildScanSheet } from "./sedan-mesh";
 
 import { SEVERITY_COLOR, resolveZone, type DamagePart } from "@/lib/vehicle-damage";
 
-const DEFAULT_VIEW = { rotY: 0.78, rotX: -0.15, zoom: 4.8 };
+const DEFAULT_VIEW = { rotY: 0.78, rotX: -0.15, zoom: 6.2 };
 
 export function Vehicle3D({ parts }: { parts: DamagePart[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -64,8 +64,8 @@ export function Vehicle3D({ parts }: { parts: DamagePart[] }) {
       const anchor = car.zones[zone].clone();
       const color = SEVERITY_COLOR[p.severity].hex;
 
-      // stagger the connector length so cards don't collide on screen
-      const lift = 0.85 + (i % 3) * 0.55;
+      // stagger the connector length so cards stay off the car body
+      const lift = 1.35 + (i % 3) * 0.45;
       const outward = new THREE.Vector3(anchor.x * 0.2, 0.62, anchor.z * 0.95)
         .normalize()
         .applyAxisAngle(new THREE.Vector3(0, 1, 0), (i - (parts.length - 1) / 2) * 0.75)
@@ -121,7 +121,7 @@ export function Vehicle3D({ parts }: { parts: DamagePart[] }) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
-      v.zoom = clampNum(v.zoom * Math.exp(dy * 0.0015), 5, 16);
+      v.zoom = clampNum(v.zoom * Math.exp(dy * 0.0015), 4, 16);
     };
     const canvas = renderer.domElement;
     canvas.addEventListener("pointerdown", onPointerDown);
@@ -170,8 +170,8 @@ export function Vehicle3D({ parts }: { parts: DamagePart[] }) {
       (scan.mesh.material as THREE.ShaderMaterial).uniforms['uOpacity']!.value =
         0.11 * (1 - Math.abs(sweep) * 0.6);
 
-      platform.ringMat.opacity = 0.24 + Math.sin(t * 1.6) * 0.07;
-      platform.ring2Mat.opacity = 0.16 + Math.sin(t * 1.6 + 1.2) * 0.06;
+      platform.ringMat.opacity = 0.35 + Math.sin(t * 1.6) * 0.1;
+      platform.ring2Mat.opacity = 0.25 + Math.sin(t * 1.6 + 1.2) * 0.1;
       particles.points.rotation.y = t * 0.03;
       particles.points.position.y = Math.sin(t * 0.5) * 0.06;
 
@@ -217,8 +217,8 @@ export function Vehicle3D({ parts }: { parts: DamagePart[] }) {
           const cur = placements[order[a]!]!;
           for (let b = 0; b < a; b++) {
             const prev = placements[order[b]!]!;
-            if (Math.abs(cur.x - prev.x) < CARD_W && cur.y - prev.y < CARD_H) {
-              cur.y = prev.y + CARD_H;
+            if (Math.abs(cur.x - prev.x) < CARD_W + 10 && cur.y - prev.y < CARD_H + 10) {
+              cur.y = prev.y + CARD_H + 10;
             }
           }
         }
@@ -279,8 +279,8 @@ export function Vehicle3D({ parts }: { parts: DamagePart[] }) {
   return (
     <div className="relative h-full w-full overflow-hidden">
       {/* chamber ambience behind the transparent canvas */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_35%,rgba(34,211,238,0.10),transparent_65%)]" />
-      <div className="pointer-events-none absolute inset-x-[8%] bottom-[4%] h-[26%] rounded-[50%] bg-cyan-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(0,217,255,0.15),transparent_60%)]" />
+      <div className="pointer-events-none absolute inset-x-[8%] bottom-[4%] h-[26%] rounded-[50%] bg-cyan-500/20 blur-3xl" />
 
       <div
         ref={mountRef}

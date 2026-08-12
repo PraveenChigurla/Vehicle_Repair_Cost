@@ -82,14 +82,14 @@ export function VehicleDamageDashboard({
         }} 
       />
       {/* HEADER */}
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--border)] bg-[var(--panel-elevated)] px-5 py-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--panel-elevated)] px-4 py-3 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-[#00D9FF] to-[#7C3CFF] shadow-[0_0_15px_rgba(0,217,255,0.3)]">
             <Boxes size={20} className="text-[#050914]" />
           </div>
           <div>
-            <h1 className="text-base font-extrabold tracking-tight flex items-center gap-1">
-              CarCheckUp <ThreeSixtyLogo className="h-5 w-auto text-cyan-400 mt-0.5" />
+            <h1 className="text-base font-extrabold tracking-tight flex items-center gap-1.5">
+              CarCheckUp <ThreeSixtyLogo className="h-6 w-auto text-cyan-400 mt-0.5" />
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
               AI-powered damage assessment &amp; repair estimation
@@ -129,7 +129,7 @@ export function VehicleDamageDashboard({
           borderColorClassName="border-[#00D9FF]"
           shadowClassName="shadow-[0_0_15px_rgba(0,217,255,0.2)]"
         >
-          <div className="relative w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[#03060c] h-[58vh] min-h-[400px] sm:h-[65vh] xl:h-[70vh]">
+          <div className="relative w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[#03060c] h-[50vh] min-h-[350px] sm:h-[55vh] xl:h-[60vh] 2xl:h-[65vh]">
             <Vehicle3D parts={data.parts} />
           </div>
 
