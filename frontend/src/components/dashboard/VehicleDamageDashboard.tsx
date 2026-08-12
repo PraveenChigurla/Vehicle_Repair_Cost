@@ -3,6 +3,7 @@ import { Boxes, Check, Circle, Loader2, Radar, ScanLine, Sparkles } from "lucide
 
 import { AnalysisPanel } from "./AnalysisPanel";
 import {
+  AiEvidencePanel,
   ConfidencePanel,
   CostBreakdownPanel,
   ExportActions,
@@ -29,15 +30,16 @@ const SCAN_STAGES = [
 export function VehicleDamageDashboard({ 
   data = DEMO_DATA, 
   stage = "report",
+  imageUrl = null,
   onUpload
 }: { 
   data?: VehicleDamageData;
   stage?: "upload" | "scanning" | "report";
+  imageUrl?: string | null;
   onUpload?: (file: File) => void;
 }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Derive scanning progress from a simple effect or just use a dummy progress for now
   const [scanStep, setScanStep] = React.useState(0);
   React.useEffect(() => {
     if (stage === "scanning") {
@@ -50,6 +52,20 @@ export function VehicleDamageDashboard({
       setScanStep(6);
     }
   }, [stage]);
+
+  const getStepperIndex = () => {
+    if (stage === "upload") return 0;
+    if (stage === "report") return 5;
+    switch (scanStep) {
+      case 0: return 1;
+      case 1:
+      case 2: return 1;
+      case 3: return 2;
+      case 4: return 3;
+      case 5: return 4;
+      default: return 0;
+    }
+  };
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-background p-4 text-foreground lg:p-6">
@@ -80,7 +96,7 @@ export function VehicleDamageDashboard({
           </div>
         </div>
 
-        <Stepper current={3} />
+        <Stepper current={getStepperIndex()} />
 
         <div className="flex items-center gap-4">
           <div className="text-right">
@@ -107,8 +123,10 @@ export function VehicleDamageDashboard({
         <Panel
           className="xl:col-span-8"
           bodyClassName="p-3 sm:p-4"
-          icon={<Radar size={15} className="text-[#00D9FF]" />}
+          icon={<Radar size={16} className="text-[#00D9FF]" />}
           title="3D AI Vehicle Inspection"
+          borderColorClassName="border-[#00D9FF]"
+          shadowClassName="shadow-[0_0_15px_rgba(0,217,255,0.2)]"
         >
           <div className="relative w-full overflow-hidden rounded-xl border border-[var(--border)] bg-[#03060c] h-[58vh] min-h-[400px] sm:h-[65vh] xl:h-[70vh]">
             <Vehicle3D parts={data.parts} />
@@ -155,16 +173,19 @@ export function VehicleDamageDashboard({
 
         <Panel
           className="xl:col-span-4"
-          icon={<ScanLine size={15} className="text-emerald-400" />}
+          icon={<Sparkles size={16} className="text-[#0D47A1]" />}
           title="Analysis Complete"
+          borderColorClassName="border-[#0D47A1]"
+          shadowClassName="shadow-[0_0_15px_rgba(13,71,161,0.2)]"
         >
           <AnalysisPanel data={data} />
         </Panel>
       </div>
 
       {/* SUPPORTING PANELS */}
-      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
         <VehicleOverview data={data} />
+        <AiEvidencePanel imageUrl={imageUrl} />
         <SeverityDistribution data={data} />
         <CostBreakdownPanel data={data} />
         <ConfidencePanel data={data} />
@@ -178,7 +199,7 @@ export function VehicleDamageDashboard({
           <InspectionMetrics data={data} />
         </div>
         <div className="lg:col-span-3">
-          <ExportActions />
+          <ExportActions data={data} />
         </div>
       </div>
     </div>

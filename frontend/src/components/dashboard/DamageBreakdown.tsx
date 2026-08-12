@@ -16,8 +16,8 @@ export function DamageBreakdown({ parts }: { parts: DamagePart[] }) {
           return (
             <div
               key={`${p.part}-${i}`}
-              className="group relative overflow-hidden border border-[var(--border)] border-l-2 bg-[var(--panel)]/40 p-3 transition-colors hover:bg-[var(--panel)]"
-              style={{ borderLeftColor: sev.dot }}
+              className="group relative overflow-hidden border border-[var(--border)] border-l-2 p-3 transition-all hover:brightness-110"
+              style={{ borderLeftColor: sev.dot, background: `linear-gradient(to right, ${sev.dot}1A, transparent)` }}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">

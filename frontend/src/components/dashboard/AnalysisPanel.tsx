@@ -9,8 +9,9 @@ export function AnalysisPanel({ data }: { data: VehicleDamageData }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded border border-[var(--border)] bg-gradient-to-br from-[#7C3CFF]/10 to-[#00D9FF]/5 p-5 shadow-[0_0_20px_rgba(0,217,255,0.1)] backdrop-blur-md relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-[#00D9FF]/10 blur-[40px] rounded-full translate-x-1/2 -translate-y-1/2"></div>
+      <div className="rounded border border-[var(--border)] bg-[#050914] p-5 shadow-[inset_0_0_50px_rgba(124,60,255,0.15),0_0_20px_rgba(0,217,255,0.1)] backdrop-blur-md relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-[#00D9FF]/10 blur-[40px] rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#00D9FF]/5 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none"></div>
         <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-[#00D9FF]">
           <IndianRupee size={12} /> TOTAL ESTIMATED REPAIR COST
         </div>

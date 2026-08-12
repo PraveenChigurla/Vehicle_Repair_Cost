@@ -6,6 +6,9 @@ export function Panel({
   right,
   className = "",
   bodyClassName = "p-5",
+  innerBgClassName = "bg-[var(--panel-elevated)]",
+  borderColorClassName = "border-[var(--border)]",
+  shadowClassName = "shadow-[0_4px_20px_rgba(0,0,0,0.5)]",
   children,
 }: {
   title?: string;
@@ -13,15 +16,16 @@ export function Panel({
   right?: ReactNode;
   className?: string;
   bodyClassName?: string;
+  innerBgClassName?: string;
+  borderColorClassName?: string;
+  shadowClassName?: string;
   children: ReactNode;
 }) {
   return (
     <div
-      className={`relative rounded border border-[var(--border)] bg-gradient-to-b from-[var(--panel-elevated)] to-[var(--panel)] shadow-[0_4px_20px_rgba(0,0,0,0.5)] overflow-hidden ${className}`}
+      className={`relative rounded border ${borderColorClassName} ${shadowClassName} overflow-hidden ${className}`}
     >
-      <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#00D9FF]/30 to-transparent"></div>
-      <div className="absolute top-0 left-0 w-[2px] h-[10px] bg-[#00D9FF]/50"></div>
-      <div className="absolute top-0 right-0 w-[2px] h-[10px] bg-[#00D9FF]/50"></div>
+      <div className={`absolute inset-0 ${innerBgClassName} pointer-events-none`} />
       {(title || right) && (
         <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3 bg-[#050914]/40">
           <div className="flex items-center gap-2 text-[#F1F5F9]">

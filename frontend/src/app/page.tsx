@@ -11,10 +11,12 @@ export default function Home() {
   const [stage, setStage] = useState<PipelineStage>("upload");
   const [vehicleData, setVehicleData] = useState<VehicleDamageData>(DEMO_DATA);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   const handleUpload = async (file: File) => {
     setError(null);
     setStage("scanning");
+    setUploadedImageUrl(URL.createObjectURL(file));
     
     // Create a temporary state while scanning starts
     setVehicleData(prev => ({
@@ -89,7 +91,12 @@ export default function Home() {
           <button onClick={() => setError(null)} className="ml-4 underline opacity-70 hover:opacity-100">Dismiss</button>
         </div>
       )}
-      <VehicleDamageDashboard data={stage === 'upload' ? DEMO_DATA : vehicleData} stage={stage} onUpload={handleUpload} />
+      <VehicleDamageDashboard 
+        data={stage === 'upload' ? DEMO_DATA : vehicleData} 
+        stage={stage} 
+        imageUrl={uploadedImageUrl}
+        onUpload={handleUpload} 
+      />
     </>
   );
 }
