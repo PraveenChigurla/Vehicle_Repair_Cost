@@ -1,0 +1,19 @@
+{
+    "categorical_features": [
+        "part",
+        "severity"
+    ],
+    "numeric_features": [
+        "damage_area_ratio",
+        "yolo_confidence",
+        "severity_confidence"
+    ],
+    "target": "total_repair_cost",
+    "target_transform": "log1p",
+    "labor_rate_per_hour": 550,
+    "severity_classes": [
+        "minor",
+        "moderate",
+        "severe"
+    ]
+}

@@ -1,0 +1,1154 @@
+--- Cell 4 ---
+V4_METADATA = (
+    "/content/gdrive/MyDrive/"
+    "Vehicle_Damage_Project/"
+    "severity_crop_dataset_v4/"
+    "crop_metadata_v4_corrected.csv"
+)
+
+df_v4 = pd.read_csv(V4_METADATA)
+
+print(df_v4.shape)
+print(df_v4.columns.tolist())
+--------------------
+--- Cell 33 ---
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score
+)
+
+print("=" * 70)
+print("NOTEBOOK 3 — VEHICLE REPAIR COST PREDICTION")
+print("=" * 70)
+
+RANDOM_STATE = 42
+np.random.seed(RANDOM_STATE)
+
+PROJECT_DIR = "/content/gdrive/MyDrive/Vehicle_Damage_Project"
+
+NOTEBOOK3_DIR = os.path.join(
+    PROJECT_DIR,
+    "repair_cost_prediction"
+)
+
+os.makedirs(NOTEBOOK3_DIR, exist_ok=True)
+
+print("Project directory :", PROJECT_DIR)
+print("Notebook 3 folder :", NOTEBOOK3_DIR)
+--------------------
+--- Cell 37 ---
+N_SAMPLES = 8000
+
+parts = list(PART_COSTS.keys())
+severities = ["minor", "moderate", "severe"]
+
+severity_weights = [0.25, 0.35, 0.40]
+
+records = []
+
+for _ in range(N_SAMPLES):
+
+    part = np.random.choice(parts)
+
+    severity = np.random.choice(
+        severities,
+        p=severity_weights
+    )
+
+    base = PART_COSTS[part][severity]
+
+    # Damage area ratio
+    if severity == "minor":
+        area_ratio = np.random.uniform(0.02, 0.20)
+
+    elif severity == "moderate":
+        area_ratio = np.random.uniform(0.15, 0.50)
+
+    else:
+        area_ratio = np.random.uniform(0.40, 0.90)
+
+    # Model confidence values
+    yolo_confidence = np.random.uniform(0.45, 0.98)
+
+    severity_confidence = np.random.uniform(0.40, 0.98)
+
+    # Add realistic variation to labor
+    labor_hours = base["labor_hours"] * np.random.uniform(
+        0.80, 1.25
+    )
+
+    # Parts cost variation
+    parts_cost = base["parts"] * np.random.uniform(
+        0.80, 1.25
+    )
+
+    # Paint variation
+    paint_cost = base["paint"] * np.random.uniform(
+        0.80, 1.20
+    )
+
+    # Labor cost
+    labor_cost = labor_hours * LABOR_RATE
+
+    # Base repair cost
+    total_cost = (
+        parts_cost
+        + labor_cost
+        + paint_cost
+    )
+
+    # Larger damage generally increases repair cost
+    area_factor = 0.75 + area_ratio * 0.50
+
+    total_cost *= area_factor
+
+    # Small real-world price variation
+    noise = np.random.normal(
+        loc=1.0,
+        scale=0.07
+    )
+
+    total_cost *= noise
+
+    total_cost = max(total_cost, 500)
+
+    records.append({
+        "part": part,
+        "severity": severity,
+        "damage_area_ratio": round(area_ratio, 4),
+        "yolo_confidence": round(yolo_confidence, 4),
+        "severity_confidence": round(severity_confidence, 4),
+        "labor_hours": round(labor_hours, 2),
+        "parts_cost": round(parts_cost, 2),
+        "paint_cost": round(paint_cost, 2),
+        "labor_cost": round(labor_cost, 2),
+        "total_repair_cost": round(total_cost, 2)
+    })
+
+
+repair_df = pd.DataFrame(records)
+
+print("=" * 70)
+print("SYNTHETIC REPAIR COST DATASET")
+print("=" * 70)
+
+print("Shape:", repair_df.shape)
+
+display(repair_df.head())
+--------------------
+--- Cell 39 ---
+print("=" * 70)
+print("DATASET CHECK")
+print("=" * 70)
+
+print("\nMissing values:")
+print(repair_df.isnull().sum())
+
+print("\nDuplicate rows:")
+print(repair_df.duplicated().sum())
+
+print("\nPart distribution:")
+print(repair_df["part"].value_counts())
+
+print("\nSeverity distribution:")
+print(repair_df["severity"].value_counts())
+
+print("\nCost statistics:")
+display(
+    repair_df["total_repair_cost"].describe()
+)
+--------------------
+--- Cell 41 ---
+print("=" * 70)
+print("AVERAGE COST BY SEVERITY")
+print("=" * 70)
+
+severity_cost = (
+    repair_df
+    .groupby("severity")["total_repair_cost"]
+    .agg(["count", "mean", "median", "min", "max"])
+)
+
+display(severity_cost)
+
+
+print("=" * 70)
+print("AVERAGE COST BY PART")
+print("=" * 70)
+
+part_cost = (
+    repair_df
+    .groupby("part")["total_repair_cost"]
+    .agg(["count", "mean", "median", "min", "max"])
+)
+
+display(part_cost)
+
+
+print("=" * 70)
+print("PART × SEVERITY")
+print("=" * 70)
+
+pivot = pd.pivot_table(
+    repair_df,
+    values="total_repair_cost",
+    index="part",
+    columns="severity",
+    aggfunc="mean"
+)
+
+display(pivot.round(2))
+--------------------
+--- Cell 43 ---
+COST_DATASET_PATH = os.path.join(
+    NOTEBOOK3_DIR,
+    "synthetic_vehicle_repair_costs.csv"
+)
+
+repair_df.to_csv(
+    COST_DATASET_PATH,
+    index=False
+)
+
+print("Saved:")
+print(COST_DATASET_PATH)
+
+print("\nShape:", repair_df.shape)
+--------------------
+--- Cell 44 ---
+# ============================================================
+# CELL 7 — PREPARE FEATURES
+# ============================================================
+
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.impute import SimpleImputer
+
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score
+)
+
+# ------------------------------------------------------------
+# Target
+# ------------------------------------------------------------
+
+TARGET = "total_repair_cost"
+
+# ------------------------------------------------------------
+# REALISTIC FEATURES
+# These are the features our actual YOLO + severity pipeline
+# can provide.
+# ------------------------------------------------------------
+
+FEATURES = [
+    "part",
+    "severity",
+    "damage_area_ratio",
+    "yolo_confidence",
+    "severity_confidence"
+]
+
+X = repair_df[FEATURES].copy()
+y = repair_df[TARGET].copy()
+
+print("=" * 70)
+print("REPAIR COST MODEL FEATURES")
+print("=" * 70)
+
+print("\nFeatures:")
+print(FEATURES)
+
+print("\nX shape:", X.shape)
+print("y shape:", y.shape)
+
+display(X.head())
+--------------------
+--- Cell 52 ---
+# ============================================================
+# CELL 15 — MODEL COMPARISON
+# ============================================================
+
+comparison = pd.DataFrame({
+    "Model": [
+        "Linear Regression",
+        "Random Forest",
+        "XGBoost"
+    ],
+    "MAE": [
+        mae_linear,
+        mae_rf,
+        mae_xgb
+    ],
+    "RMSE": [
+        rmse_linear,
+        rmse_rf,
+        rmse_xgb
+    ],
+    "R2": [
+        r2_linear,
+        r2_rf,
+        r2_xgb
+    ]
+})
+
+comparison = comparison.sort_values(
+    "MAE"
+).reset_index(drop=True)
+
+display(comparison)
+--------------------
+--- Cell 54 ---
+# ============================================================
+# CELL 17 — FINAL MODEL COMPARISON
+# ============================================================
+
+final_comparison = pd.DataFrame({
+    "Model": [
+        "Random Forest",
+        "XGBoost"
+    ],
+    "Test MAE": [
+        rf_test_mae,
+        xgb_test_mae
+    ],
+    "Test RMSE": [
+        rf_test_rmse,
+        xgb_test_rmse
+    ],
+    "Test R2": [
+        rf_test_r2,
+        xgb_test_r2
+    ]
+})
+
+display(
+    final_comparison.sort_values(
+        "Test MAE"
+    ).reset_index(drop=True)
+)
+--------------------
+--- Cell 63 ---
+# ============================================================
+# STEP 2 — AUTOMATIC CROP → SEVERITY → REPAIR COST
+# ============================================================
+
+import cv2
+import numpy as np
+import pandas as pd
+
+
+def predict_severity(crop):
+    """
+    Predict severity from an automatically generated YOLO crop.
+    """
+
+    # Convert BGR → RGB
+    crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+
+    # Resize exactly as used during EfficientNet training
+    crop_resized = cv2.resize(
+        crop_rgb,
+        (224, 224)
+    )
+
+    # EfficientNet model was receiving pixel values in 0–255 range
+    image_array = crop_resized.astype(np.float32)
+
+    # Add batch dimension
+    image_array = np.expand_dims(
+        image_array,
+        axis=0
+    )
+
+    # Predict
+    probabilities = severity_model.predict(
+        image_array,
+        verbose=0
+    )[0]
+
+    predicted_id = int(
+        np.argmax(probabilities)
+    )
+
+    severity = SEVERITY_CLASSES[predicted_id]
+
+    severity_confidence = float(
+        probabilities[predicted_id]
+    )
+
+    return severity, severity_confidence, probabilities
+
+
+def calculate_damage_area_ratio(
+    bbox,
+    image_width,
+    image_height
+):
+    """
+    Calculate bounding-box area / complete image area.
+    """
+
+    x1, y1, x2, y2 = bbox
+
+    box_width = max(0, x2 - x1)
+    box_height = max(0, y2 - y1)
+
+    damage_area = box_width * box_height
+    image_area = image_width * image_height
+
+    if image_area == 0:
+        return 0.0
+
+    return float(
+        damage_area / image_area
+    )
+
+
+def predict_repair_cost(
+    part,
+    severity,
+    damage_area_ratio,
+    yolo_confidence,
+    severity_confidence
+):
+    """
+    Predict repair cost using the trained XGBoost model.
+    """
+
+    input_df = pd.DataFrame([{
+        "part": part,
+        "severity": severity,
+        "damage_area_ratio": damage_area_ratio,
+        "yolo_confidence": yolo_confidence,
+        "severity_confidence": severity_confidence
+    }])
+
+    # Apply the exact preprocessing used during training
+    X_processed = cost_preprocessor.transform(
+        input_df
+    )
+
+    predicted_cost = cost_model.predict(
+        X_processed
+    )[0]
+
+    # Cost cannot logically be negative
+    predicted_cost = max(
+        0,
+        float(predicted_cost)
+    )
+
+    return predicted_cost
+
+
+print("✅ Severity and repair-cost inference functions ready.")
+--------------------
+--- Cell 64 ---
+import os
+import cv2
+import numpy as np
+import pandas as pd
+
+
+# ============================================================
+# REPAIR COST PREDICTION
+# ============================================================
+
+def predict_repair_cost(
+    part,
+    severity,
+    damage_area_ratio,
+    yolo_confidence,
+    severity_confidence
+):
+    """
+    Predict repair cost using the trained XGBoost model.
+
+    cost_model is already a Pipeline containing
+    the preprocessing step, so raw features are passed directly.
+    """
+
+    input_df = pd.DataFrame([{
+        "part": part,
+        "severity": severity,
+        "damage_area_ratio": damage_area_ratio,
+        "yolo_confidence": yolo_confidence,
+        "severity_confidence": severity_confidence
+    }])
+
+    # cost_model already contains the preprocessor.
+    # Therefore, DO NOT call cost_preprocessor.transform()
+    # separately here.
+    predicted_cost = cost_model.predict(
+        input_df
+    )[0]
+
+    # Cost cannot logically be negative
+    predicted_cost = max(
+        0,
+        float(predicted_cost)
+    )
+
+    return predicted_cost
+
+
+# ============================================================
+# STEP 3 — FULL PIPELINE TEST
+# ============================================================
+
+TEST_IMAGE = os.path.join(
+    TEST_DIR,
+    "test_car_1.jpg"
+)
+
+image = cv2.imread(TEST_IMAGE)
+
+if image is None:
+    raise FileNotFoundError(
+        f"Could not load image:\n{TEST_IMAGE}"
+    )
+
+image_height, image_width = image.shape[:2]
+
+
+print("=" * 70)
+print("END-TO-END VEHICLE DAMAGE ANALYSIS")
+print("=" * 70)
+
+print(
+    f"Image size: "
+    f"{image_width} × {image_height}"
+)
+
+
+# ============================================================
+# YOLO DETECTION
+# ============================================================
+
+results = yolo_model(
+    image,
+    verbose=False
+)
+
+result = results[0]
+
+boxes = result.boxes
+
+print(f"\nYOLO detections: {len(boxes)}")
+
+
+# ============================================================
+# INITIALIZE RESULTS
+# ============================================================
+
+total_cost = 0.0
+
+predictions = []
+
+
+# ============================================================
+# PROCESS EACH DETECTION
+# ============================================================
+
+for i, box in enumerate(boxes):
+
+    # --------------------------------------------------------
+    # Bounding box
+    # --------------------------------------------------------
+
+    x1, y1, x2, y2 = (
+        np.asarray(
+            box.xyxy[0]
+            .cpu()
+            .numpy()
+        )
+        .astype(int)
+    )
+
+    # --------------------------------------------------------
+    # YOLO confidence
+    # --------------------------------------------------------
+
+    yolo_confidence = float(
+        box.conf[0]
+        .cpu()
+        .numpy()
+    )
+
+    # --------------------------------------------------------
+    # YOLO class
+    # --------------------------------------------------------
+
+    class_id = int(
+        box.cls[0]
+        .cpu()
+        .numpy()
+    )
+
+    part = result.names[class_id]
+
+
+    # --------------------------------------------------------
+    # AUTOMATIC CROP
+    # --------------------------------------------------------
+
+    crop = image[
+        y1:y2,
+        x1:x2
+    ]
+
+    if crop.size == 0:
+        print(
+            f"Skipping detection {i + 1}: "
+            f"empty crop"
+        )
+        continue
+
+
+    # --------------------------------------------------------
+    # SEVERITY PREDICTION
+    # --------------------------------------------------------
+
+    severity, severity_confidence, probabilities = (
+        predict_severity(crop)
+    )
+
+
+    # --------------------------------------------------------
+    # DAMAGE AREA RATIO
+    # --------------------------------------------------------
+
+    damage_area_ratio = calculate_damage_area_ratio(
+        (x1, y1, x2, y2),
+        image_width,
+        image_height
+    )
+
+
+    # --------------------------------------------------------
+    # REPAIR COST PREDICTION
+    # --------------------------------------------------------
+
+    repair_cost = predict_repair_cost(
+        part=part,
+        severity=severity,
+        damage_area_ratio=damage_area_ratio,
+        yolo_confidence=yolo_confidence,
+        severity_confidence=severity_confidence
+    )
+
+    total_cost += repair_cost
+
+
+    # --------------------------------------------------------
+    # STORE RESULT
+    # --------------------------------------------------------
+
+    predictions.append({
+        "part": part,
+        "severity": severity,
+        "yolo_confidence": yolo_confidence,
+        "severity_confidence": severity_confidence,
+        "damage_area_ratio": damage_area_ratio,
+        "repair_cost": repair_cost,
+        "bbox": (x1, y1, x2, y2)
+    })
+
+
+    # --------------------------------------------------------
+    # PRINT RESULT
+    # --------------------------------------------------------
+
+    print(f"\nDamage #{i + 1}")
+
+    print(
+        f"Part                 : {part}"
+    )
+
+    print(
+        f"YOLO confidence      : "
+        f"{yolo_confidence:.3f}"
+    )
+
+    print(
+        f"Severity             : "
+        f"{severity}"
+    )
+
+    print(
+        f"Severity confidence  : "
+        f"{severity_confidence:.3f}"
+    )
+
+    print(
+        f"Damage area ratio    : "
+        f"{damage_area_ratio:.4f}"
+    )
+
+    print(
+        f"Estimated repair cost: "
+        f"₹{repair_cost:,.2f}"
+    )
+
+    print(
+        f"Bounding box         : "
+        f"{(x1, y1, x2, y2)}"
+    )
+
+
+# ============================================================
+# FINAL TOTAL
+# ============================================================
+
+print("\n" + "=" * 70)
+
+print(
+    f"TOTAL ESTIMATED REPAIR COST: "
+    f"₹{total_cost:,.2f}"
+)
+
+print("=" * 70)
+--------------------
+--- Cell 65 ---
+# ============================================================
+# STEP 4 — FINAL VISUAL VEHICLE DAMAGE REPORT
+# ============================================================
+
+import cv2
+import numpy as np
+import pandas as pd
+from IPython.display import display, Image
+
+
+# ============================================================
+# INPUT IMAGE
+# ============================================================
+
+TEST_IMAGE = os.path.join(
+    TEST_DIR,
+    "test_car_1.jpg"
+)
+
+image = cv2.imread(TEST_IMAGE)
+
+if image is None:
+    raise FileNotFoundError(
+        f"Could not load image:\n{TEST_IMAGE}"
+    )
+
+output_image = image.copy()
+
+image_height, image_width = image.shape[:2]
+
+
+# ============================================================
+# YOLO DETECTION
+# ============================================================
+
+results = yolo_model(
+    image,
+    verbose=False
+)
+
+result = results[0]
+boxes = result.boxes
+
+
+# ============================================================
+# RESULT STORAGE
+# ============================================================
+
+predictions = []
+total_cost = 0.0
+
+
+# ============================================================
+# COLORS / DISPLAY SETTINGS
+# ============================================================
+
+BOX_COLOR = (0, 255, 0)
+TEXT_COLOR = (255, 255, 255)
+TEXT_BG = (0, 0, 0)
+
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+
+
+# ============================================================
+# PROCESS EACH DETECTED DAMAGE
+# ============================================================
+
+for i, box in enumerate(boxes):
+
+    # --------------------------------------------------------
+    # Bounding box
+    # --------------------------------------------------------
+
+    x1, y1, x2, y2 = map(
+        int,
+        box.xyxy[0]
+        .cpu()
+        .numpy()
+    )
+
+    # Keep coordinates inside image
+    x1 = max(0, min(x1, image_width - 1))
+    x2 = max(0, min(x2, image_width - 1))
+    y1 = max(0, min(y1, image_height - 1))
+    y2 = max(0, min(y2, image_height - 1))
+
+
+    # --------------------------------------------------------
+    # YOLO confidence
+    # --------------------------------------------------------
+
+    yolo_confidence = float(
+        box.conf[0]
+        .cpu()
+        .numpy()
+    )
+
+
+    # --------------------------------------------------------
+    # YOLO class
+    # --------------------------------------------------------
+
+    class_id = int(
+        box.cls[0]
+        .cpu()
+        .numpy()
+    )
+
+    part = result.names[class_id]
+
+
+    # --------------------------------------------------------
+    # AUTOMATIC CROP
+    # --------------------------------------------------------
+
+    crop = image[
+        y1:y2,
+        x1:x2
+    ]
+
+    if crop.size == 0:
+        continue
+
+
+    # --------------------------------------------------------
+    # SEVERITY PREDICTION
+    # --------------------------------------------------------
+
+    severity, severity_confidence, probabilities = (
+        predict_severity(crop)
+    )
+
+
+    # --------------------------------------------------------
+    # DAMAGE AREA RATIO
+    # --------------------------------------------------------
+
+    damage_area_ratio = calculate_damage_area_ratio(
+        (x1, y1, x2, y2),
+        image_width,
+        image_height
+    )
+
+
+    # --------------------------------------------------------
+    # REPAIR COST
+    # --------------------------------------------------------
+
+    repair_cost = predict_repair_cost(
+        part=part,
+        severity=severity,
+        damage_area_ratio=damage_area_ratio,
+        yolo_confidence=yolo_confidence,
+        severity_confidence=severity_confidence
+    )
+
+    total_cost += repair_cost
+
+
+    # ========================================================
+    # DRAW BOUNDING BOX
+    # ========================================================
+
+    cv2.rectangle(
+        output_image,
+        (x1, y1),
+        (x2, y2),
+        BOX_COLOR,
+        3
+    )
+
+
+    # ========================================================
+    # LABEL
+    # ========================================================
+
+    label_line_1 = f"{part} | {severity.upper()}"
+    label_line_2 = f"Repair: Rs {repair_cost:,.0f}"
+
+    # Text sizes
+    scale = max(
+        0.6,
+        min(image_width, image_height) / 1200
+    )
+
+    thickness = 2
+
+
+    # --------------------------------------------------------
+    # Calculate text box dimensions
+    # --------------------------------------------------------
+
+    (w1, h1), _ = cv2.getTextSize(
+        label_line_1,
+        FONT,
+        scale,
+        thickness
+    )
+
+    (w2, h2), _ = cv2.getTextSize(
+        label_line_2,
+        FONT,
+        scale,
+        thickness
+    )
+
+    text_width = max(w1, w2)
+    text_height = h1 + h2 + 20
+
+
+    # --------------------------------------------------------
+    # Label position
+    # --------------------------------------------------------
+
+    label_x = x1
+
+    label_y = max(
+        y1 - 10,
+        text_height + 10
+    )
+
+
+    # --------------------------------------------------------
+    # Background rectangle
+    # --------------------------------------------------------
+
+    cv2.rectangle(
+        output_image,
+        (
+            label_x,
+            label_y - text_height
+        ),
+        (
+            label_x + text_width + 20,
+            label_y
+        ),
+        TEXT_BG,
+        -1
+    )
+
+
+    # --------------------------------------------------------
+    # Draw text
+    # --------------------------------------------------------
+
+    cv2.putText(
+        output_image,
+        label_line_1,
+        (
+            label_x + 10,
+            label_y - h2 - 8
+        ),
+        FONT,
+        scale,
+        TEXT_COLOR,
+        thickness,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        output_image,
+        label_line_2,
+        (
+            label_x + 10,
+            label_y - 8
+        ),
+        FONT,
+        scale,
+        TEXT_COLOR,
+        thickness,
+        cv2.LINE_AA
+    )
+
+
+    # ========================================================
+    # STORE PREDICTION
+    # ========================================================
+
+    predictions.append({
+        "damage_id": i + 1,
+        "part": part,
+        "severity": severity,
+        "yolo_confidence": yolo_confidence,
+        "severity_confidence": severity_confidence,
+        "damage_area_ratio": damage_area_ratio,
+        "repair_cost": repair_cost,
+        "bbox": (x1, y1, x2, y2)
+    })
+
+
+# ============================================================
+# FINAL SUMMARY PANEL
+# ============================================================
+
+summary_text = (
+    f"TOTAL ESTIMATED REPAIR COST: "
+    f"Rs {total_cost:,.2f}"
+)
+
+# Panel dimensions
+panel_height = 80
+
+panel_y1 = image_height - panel_height
+panel_y2 = image_height
+
+cv2.rectangle(
+    output_image,
+    (0, panel_y1),
+    (image_width, panel_y2),
+    TEXT_BG,
+    -1
+)
+
+summary_scale = max(
+    0.7,
+    min(image_width, image_height) / 1100
+)
+
+cv2.putText(
+    output_image,
+    summary_text,
+    (
+        25,
+        image_height - 25
+    ),
+    FONT,
+    summary_scale,
+    TEXT_COLOR,
+    2,
+    cv2.LINE_AA
+)
+
+
+# ============================================================
+# SAVE FINAL IMAGE
+# ============================================================
+
+OUTPUT_DIR = os.path.join(
+    PROJECT_DIR,
+    "repair_cost_prediction",
+    "outputs"
+)
+
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
+
+OUTPUT_IMAGE = os.path.join(
+    OUTPUT_DIR,
+    "vehicle_damage_repair_report.jpg"
+)
+
+cv2.imwrite(
+    OUTPUT_IMAGE,
+    output_image
+)
+
+
+# ============================================================
+# CREATE SUMMARY DATAFRAME
+# ============================================================
+
+summary_df = pd.DataFrame(
+    predictions
+)
+
+
+# ============================================================
+# DISPLAY RESULTS
+# ============================================================
+
+print("=" * 70)
+print("FINAL VEHICLE DAMAGE ASSESSMENT")
+print("=" * 70)
+
+print(
+    f"Detected damaged parts: "
+    f"{len(predictions)}"
+)
+
+print(
+    f"Total estimated repair cost: "
+    f"₹{total_cost:,.2f}"
+)
+
+print("=" * 70)
+
+if len(summary_df) > 0:
+
+    display(
+        summary_df[
+            [
+                "damage_id",
+                "part",
+                "severity",
+                "yolo_confidence",
+                "severity_confidence",
+                "damage_area_ratio",
+                "repair_cost"
+            ]
+        ]
+    )
+
+else:
+
+    print("No damaged parts detected.")
+
+
+print("=" * 70)
+
+print(
+    f"Annotated report saved to:\n"
+    f"{OUTPUT_IMAGE}"
+)
+
+print("=" * 70)
+
+
+# ============================================================
+# DISPLAY IMAGE IN COLAB
+# ============================================================
+
+display(
+    Image(
+        filename=OUTPUT_IMAGE
+    )
+)
+--------------------

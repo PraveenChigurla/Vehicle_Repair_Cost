@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+pydantic-settings
+opencv-python-headless
+ultralytics
+tensorflow
+scikit-learn
+xgboost
+pandas
+joblib

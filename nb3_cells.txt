@@ -1,0 +1,1033 @@
+--- Cell 22 ---
+def analyze_vehicle(
+    image_path,
+    yolo_model,
+    severity_model,
+    yolo_conf=0.25,
+    save_path=None
+):
+    """
+    Complete Vehicle Damage Assessment pipeline.
+
+    Input:
+        Original vehicle image
+
+    Pipeline:
+        YOLO detection
+            ↓
+        Automatic bounding-box crop
+            ↓
+        EfficientNet V4 severity classification
+            ↓
+        Annotated original image
+
+    Returns:
+        output_image
+        detections
+    """
+
+    # =========================================================
+    # 1. Load image
+    # =========================================================
+
+    image = cv2.imread(image_path)
+
+    if image is None:
+        raise FileNotFoundError(
+            f"Could not read image:\n{image_path}"
+        )
+
+    output_image = image.copy()
+
+    # =========================================================
+    # 2. YOLO detection
+    # =========================================================
+
+    yolo_results = yolo_model.predict(
+        source=image_path,
+        conf=yolo_conf,
+        verbose=False
+    )
+
+    result = yolo_results[0]
+
+    detections = []
+
+    # =========================================================
+    # 3. Process every detected damaged part
+    # =========================================================
+
+    for i in range(len(result.boxes)):
+
+        box = result.boxes[i]
+
+        # -----------------------------------------------------
+        # Bounding box
+        # -----------------------------------------------------
+
+        x1, y1, x2, y2 = (
+            box.xyxy[0]
+            .cpu()
+            .numpy()
+            .astype(int)
+        )
+
+        # -----------------------------------------------------
+        # YOLO information
+        # -----------------------------------------------------
+
+        yolo_confidence = float(
+            box.conf[0].cpu().numpy()
+        )
+
+        class_id = int(
+            box.cls[0].cpu().numpy()
+        )
+
+        part_name = yolo_model.names[class_id]
+
+        # -----------------------------------------------------
+        # Keep coordinates inside image
+        # -----------------------------------------------------
+
+        h, w = image.shape[:2]
+
+        x1 = max(0, min(int(x1), w - 1))
+        y1 = max(0, min(int(y1), h - 1))
+        x2 = max(0, min(int(x2), w))
+        y2 = max(0, min(int(y2), h))
+
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        # =====================================================
+        # 4. AUTOMATIC CROP
+        # =====================================================
+
+        crop = image[y1:y2, x1:x2]
+
+        if crop.size == 0:
+            continue
+
+        # =====================================================
+        # 5. Prepare crop for EfficientNet
+        # =====================================================
+
+        crop_rgb = cv2.cvtColor(
+            crop,
+            cv2.COLOR_BGR2RGB
+        )
+
+        crop_resized = cv2.resize(
+            crop_rgb,
+            (224, 224)
+        )
+
+        crop_input = (
+            np.expand_dims(
+                crop_resized.astype(np.float32),
+                axis=0
+            )
+        )
+
+        # =====================================================
+        # 6. Severity prediction
+        # =====================================================
+
+        probabilities = severity_model.predict(
+            crop_input,
+            verbose=0
+        )[0]
+
+        severity_id = int(
+            np.argmax(probabilities)
+        )
+
+        severity = SEVERITY_CLASSES[
+            severity_id
+        ]
+
+        severity_confidence = float(
+            probabilities[severity_id]
+        )
+
+        # =====================================================
+        # 7. Store detection
+        # =====================================================
+
+        detection = {
+            "part": part_name,
+            "yolo_confidence": yolo_confidence,
+            "severity": severity,
+            "severity_confidence": severity_confidence,
+            "bbox": (
+                int(x1),
+                int(y1),
+                int(x2),
+                int(y2)
+            )
+        }
+
+        detections.append(detection)
+
+        # =====================================================
+        # 8. Draw result
+        # =====================================================
+
+        output_image = draw_detection(
+            output_image,
+            detection["bbox"],
+            detection["part"],
+            detection["severity"],
+            detection["severity_confidence"],
+            detection["yolo_confidence"]
+        )
+
+    # =========================================================
+    # 9. Save result
+    # =========================================================
+
+    if save_path is not None:
+
+        os.makedirs(
+            os.path.dirname(save_path),
+            exist_ok=True
+        )
+
+        cv2.imwrite(
+            save_path,
+            output_image
+        )
+
+        print(
+            f"\n✅ Annotated image saved to:\n"
+            f"{save_path}"
+        )
+
+    return output_image, detections
+--------------------
+--- Cell 44 ---
+# ============================================================
+# CELL 7 — PREPARE FEATURES
+# ============================================================
+
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.impute import SimpleImputer
+
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score
+)
+
+# ------------------------------------------------------------
+# Target
+# ------------------------------------------------------------
+
+TARGET = "total_repair_cost"
+
+# ------------------------------------------------------------
+# REALISTIC FEATURES
+# These are the features our actual YOLO + severity pipeline
+# can provide.
+# ------------------------------------------------------------
+
+FEATURES = [
+    "part",
+    "severity",
+    "damage_area_ratio",
+    "yolo_confidence",
+    "severity_confidence"
+]
+
+X = repair_df[FEATURES].copy()
+y = repair_df[TARGET].copy()
+
+print("=" * 70)
+print("REPAIR COST MODEL FEATURES")
+print("=" * 70)
+
+print("\nFeatures:")
+print(FEATURES)
+
+print("\nX shape:", X.shape)
+print("y shape:", y.shape)
+
+display(X.head())
+--------------------
+--- Cell 47 ---
+# ============================================================
+# CELL 10 — LINEAR REGRESSION BASELINE
+# ============================================================
+
+linear_model = Pipeline(
+    steps=[
+        ("preprocessor", preprocessor),
+        ("model", LinearRegression())
+    ]
+)
+
+linear_model.fit(
+    X_train,
+    y_train
+)
+
+val_pred_linear = linear_model.predict(X_val)
+
+mae_linear = mean_absolute_error(
+    y_val,
+    val_pred_linear
+)
+
+rmse_linear = np.sqrt(
+    mean_squared_error(
+        y_val,
+        val_pred_linear
+    )
+)
+
+r2_linear = r2_score(
+    y_val,
+    val_pred_linear
+)
+
+print("=" * 70)
+print("LINEAR REGRESSION — VALIDATION")
+print("=" * 70)
+
+print(f"MAE  : ₹{mae_linear:,.2f}")
+print(f"RMSE : ₹{rmse_linear:,.2f}")
+print(f"R²   : {r2_linear:.4f}")
+--------------------
+--- Cell 48 ---
+# ============================================================
+# CELL 11 — RANDOM FOREST REGRESSOR
+# ============================================================
+
+rf_model = Pipeline(
+    steps=[
+        ("preprocessor", preprocessor),
+        (
+            "model",
+            RandomForestRegressor(
+                n_estimators=300,
+                max_depth=None,
+                min_samples_leaf=2,
+                random_state=RANDOM_STATE,
+                n_jobs=-1
+            )
+        )
+    ]
+)
+
+rf_model.fit(
+    X_train,
+    y_train
+)
+
+val_pred_rf = rf_model.predict(X_val)
+
+mae_rf = mean_absolute_error(
+    y_val,
+    val_pred_rf
+)
+
+rmse_rf = np.sqrt(
+    mean_squared_error(
+        y_val,
+        val_pred_rf
+    )
+)
+
+r2_rf = r2_score(
+    y_val,
+    val_pred_rf
+)
+
+print("=" * 70)
+print("RANDOM FOREST — VALIDATION")
+print("=" * 70)
+
+print(f"MAE  : ₹{mae_rf:,.2f}")
+print(f"RMSE : ₹{rmse_rf:,.2f}")
+print(f"R²   : {r2_rf:.4f}")
+--------------------
+--- Cell 49 ---
+# ============================================================
+# CELL 12 — XGBOOST REGRESSOR
+# ============================================================
+
+try:
+    import xgboost as xgb
+
+    print("XGBoost version:", xgb.__version__)
+
+except ImportError:
+    !pip install -q xgboost
+    import xgboost as xgb
+
+    print("XGBoost installed:", xgb.__version__)
+--------------------
+--- Cell 50 ---
+# ============================================================
+# CELL 13 — TRAIN XGBOOST
+# ============================================================
+
+xgb_model = Pipeline(
+    steps=[
+        ("preprocessor", preprocessor),
+        (
+            "model",
+            xgb.XGBRegressor(
+                n_estimators=500,
+                max_depth=6,
+                learning_rate=0.05,
+                subsample=0.85,
+                colsample_bytree=0.85,
+                min_child_weight=3,
+                reg_alpha=0.0,
+                reg_lambda=1.0,
+                objective="reg:squarederror",
+                eval_metric="mae",
+                random_state=RANDOM_STATE,
+                n_jobs=-1
+            )
+        )
+    ]
+)
+
+print("=" * 70)
+print("TRAINING XGBOOST REGRESSOR")
+print("=" * 70)
+
+xgb_model.fit(
+    X_train,
+    y_train
+)
+
+print("✅ XGBoost training complete.")
+--------------------
+--- Cell 51 ---
+# ============================================================
+# CELL 14 — XGBOOST VALIDATION
+# ============================================================
+
+val_pred_xgb = xgb_model.predict(X_val)
+
+mae_xgb = mean_absolute_error(
+    y_val,
+    val_pred_xgb
+)
+
+rmse_xgb = np.sqrt(
+    mean_squared_error(
+        y_val,
+        val_pred_xgb
+    )
+)
+
+r2_xgb = r2_score(
+    y_val,
+    val_pred_xgb
+)
+
+print("=" * 70)
+print("XGBOOST — VALIDATION")
+print("=" * 70)
+
+print(f"MAE  : ₹{mae_xgb:,.2f}")
+print(f"RMSE : ₹{rmse_xgb:,.2f}")
+print(f"R²   : {r2_xgb:.4f}")
+--------------------
+--- Cell 52 ---
+# ============================================================
+# CELL 15 — MODEL COMPARISON
+# ============================================================
+
+comparison = pd.DataFrame({
+    "Model": [
+        "Linear Regression",
+        "Random Forest",
+        "XGBoost"
+    ],
+    "MAE": [
+        mae_linear,
+        mae_rf,
+        mae_xgb
+    ],
+    "RMSE": [
+        rmse_linear,
+        rmse_rf,
+        rmse_xgb
+    ],
+    "R2": [
+        r2_linear,
+        r2_rf,
+        r2_xgb
+    ]
+})
+
+comparison = comparison.sort_values(
+    "MAE"
+).reset_index(drop=True)
+
+display(comparison)
+--------------------
+--- Cell 53 ---
+# ============================================================
+# CELL 16 — FINAL TEST EVALUATION
+# ============================================================
+
+# Random Forest
+test_pred_rf = rf_model.predict(X_test)
+
+rf_test_mae = mean_absolute_error(
+    y_test,
+    test_pred_rf
+)
+
+rf_test_rmse = np.sqrt(
+    mean_squared_error(
+        y_test,
+        test_pred_rf
+    )
+)
+
+rf_test_r2 = r2_score(
+    y_test,
+    test_pred_rf
+)
+
+
+# XGBoost
+test_pred_xgb = xgb_model.predict(X_test)
+
+xgb_test_mae = mean_absolute_error(
+    y_test,
+    test_pred_xgb
+)
+
+xgb_test_rmse = np.sqrt(
+    mean_squared_error(
+        y_test,
+        test_pred_xgb
+    )
+)
+
+xgb_test_r2 = r2_score(
+    y_test,
+    test_pred_xgb
+)
+
+
+print("=" * 70)
+print("FINAL TEST-SET EVALUATION")
+print("=" * 70)
+
+print("\nRANDOM FOREST")
+print("-" * 40)
+print(f"MAE  : ₹{rf_test_mae:,.2f}")
+print(f"RMSE : ₹{rf_test_rmse:,.2f}")
+print(f"R²   : {rf_test_r2:.4f}")
+
+print("\nXGBOOST")
+print("-" * 40)
+print(f"MAE  : ₹{xgb_test_mae:,.2f}")
+print(f"RMSE : ₹{xgb_test_rmse:,.2f}")
+print(f"R²   : {xgb_test_r2:.4f}")
+--------------------
+--- Cell 54 ---
+# ============================================================
+# CELL 17 — FINAL MODEL COMPARISON
+# ============================================================
+
+final_comparison = pd.DataFrame({
+    "Model": [
+        "Random Forest",
+        "XGBoost"
+    ],
+    "Test MAE": [
+        rf_test_mae,
+        xgb_test_mae
+    ],
+    "Test RMSE": [
+        rf_test_rmse,
+        xgb_test_rmse
+    ],
+    "Test R2": [
+        rf_test_r2,
+        xgb_test_r2
+    ]
+})
+
+display(
+    final_comparison.sort_values(
+        "Test MAE"
+    ).reset_index(drop=True)
+)
+--------------------
+--- Cell 56 ---
+import os
+import joblib
+
+MODEL_DIR = "/content/gdrive/MyDrive/Vehicle_Damage_Project/repair_cost_prediction"
+
+os.makedirs(MODEL_DIR, exist_ok=True)
+
+# Save XGBoost model
+xgb_model_path = os.path.join(
+    MODEL_DIR,
+    "xgboost_repair_cost_model.joblib"
+)
+
+joblib.dump(xgb_model, xgb_model_path)
+
+print("=" * 70)
+print("FINAL REPAIR COST MODEL SAVED")
+print("=" * 70)
+print(xgb_model_path)
+print(f"Model exists: {os.path.exists(xgb_model_path)}")
+--------------------
+--- Cell 57 ---
+# Save the preprocessing transformer
+preprocessor_path = os.path.join(
+    MODEL_DIR,
+    "repair_cost_preprocessor.joblib"
+)
+
+joblib.dump(preprocessor, preprocessor_path)
+
+print("=" * 70)
+print("PREPROCESSOR SAVED")
+print("=" * 70)
+print(preprocessor_path)
+print(f"Preprocessor exists: {os.path.exists(preprocessor_path)}")
+--------------------
+--- Cell 59 ---
+# ============================================================
+# VERIFY NOTEBOOK 3 ARTIFACTS
+# ============================================================
+
+artifacts = {
+    "XGBoost model": xgb_model_path,
+    "Preprocessor": preprocessor_path,
+    "Inference config": config_path
+}
+
+print("=" * 70)
+print("NOTEBOOK 3 ARTIFACT CHECK")
+print("=" * 70)
+
+for name, path in artifacts.items():
+    print(f"{name:<20}: {os.path.exists(path)}")
+    print(f"  {path}")
+
+print("=" * 70)
+--------------------
+--- Cell 62 ---
+#Step 1 — Load all three models
+
+# ============================================================
+# NOTEBOOK 3 — END-TO-END MODEL LOADING
+# ============================================================
+
+import os
+import json
+import joblib
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from tensorflow import keras
+from ultralytics import YOLO
+
+PROJECT_DIR = "/content/gdrive/MyDrive/Vehicle_Damage_Project"
+
+# ------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------
+
+YOLO_MODEL_PATH = (
+    PROJECT_DIR +
+    "/smoke_test/weights/best.pt"
+)
+
+SEVERITY_MODEL_PATH = (
+    PROJECT_DIR +
+    "/severity_efficientnet_v4/" +
+    "best_efficientnet_v4.keras"
+)
+
+COST_MODEL_PATH = (
+    PROJECT_DIR +
+    "/repair_cost_prediction/" +
+    "xgboost_repair_cost_model.joblib"
+)
+
+PREPROCESSOR_PATH = (
+    PROJECT_DIR +
+    "/repair_cost_prediction/" +
+    "repair_cost_preprocessor.joblib"
+)
+
+CONFIG_PATH = (
+    PROJECT_DIR +
+    "/repair_cost_prediction/" +
+    "repair_cost_inference_config.json"
+)
+
+# ------------------------------------------------------------
+# Verify paths
+# ------------------------------------------------------------
+
+paths = {
+    "YOLO": YOLO_MODEL_PATH,
+    "Severity": SEVERITY_MODEL_PATH,
+    "XGBoost": COST_MODEL_PATH,
+    "Preprocessor": PREPROCESSOR_PATH,
+    "Config": CONFIG_PATH
+}
+
+print("=" * 70)
+print("CHECKING MODEL ARTIFACTS")
+print("=" * 70)
+
+for name, path in paths.items():
+    print(f"{name:<15}: {os.path.exists(path)}")
+    if not os.path.exists(path):
+        print("  MISSING:", path)
+
+# ------------------------------------------------------------
+# Load YOLO
+# ------------------------------------------------------------
+
+yolo_model = YOLO(YOLO_MODEL_PATH)
+
+# ------------------------------------------------------------
+# Load EfficientNet severity model
+# ------------------------------------------------------------
+
+severity_model = keras.models.load_model(
+    SEVERITY_MODEL_PATH
+)
+
+# ------------------------------------------------------------
+# Load XGBoost
+# ------------------------------------------------------------
+
+cost_model = joblib.load(
+    COST_MODEL_PATH
+)
+
+# ------------------------------------------------------------
+# Load preprocessing pipeline
+# ------------------------------------------------------------
+
+cost_preprocessor = joblib.load(
+    PREPROCESSOR_PATH
+)
+
+# ------------------------------------------------------------
+# Load inference configuration
+# ------------------------------------------------------------
+
+with open(CONFIG_PATH, "r") as f:
+    cost_config = json.load(f)
+
+# ------------------------------------------------------------
+# Severity classes
+# ------------------------------------------------------------
+
+SEVERITY_CLASSES = {
+    0: "minor",
+    1: "moderate",
+    2: "severe"
+}
+
+print("\n" + "=" * 70)
+print("MODELS LOADED")
+print("=" * 70)
+
+print("YOLO model       : READY")
+print("Severity model   : READY")
+print("XGBoost model    : READY")
+print("Preprocessor     : READY")
+
+print("\nSeverity classes:")
+for k, v in SEVERITY_CLASSES.items():
+    print(f"{k} → {v}")
+
+print("\nInput size:", severity_model.input_shape)
+
+print("\n✅ End-to-end model components loaded successfully.")
+--------------------
+--- Cell 64 ---
+import os
+import cv2
+import numpy as np
+import pandas as pd
+
+
+# ============================================================
+# REPAIR COST PREDICTION
+# ============================================================
+
+def predict_repair_cost(
+    part,
+    severity,
+    damage_area_ratio,
+    yolo_confidence,
+    severity_confidence
+):
+    """
+    Predict repair cost using the trained XGBoost model.
+
+    cost_model is already a Pipeline containing
+    the preprocessing step, so raw features are passed directly.
+    """
+
+    input_df = pd.DataFrame([{
+        "part": part,
+        "severity": severity,
+        "damage_area_ratio": damage_area_ratio,
+        "yolo_confidence": yolo_confidence,
+        "severity_confidence": severity_confidence
+    }])
+
+    # cost_model already contains the preprocessor.
+    # Therefore, DO NOT call cost_preprocessor.transform()
+    # separately here.
+    predicted_cost = cost_model.predict(
+        input_df
+    )[0]
+
+    # Cost cannot logically be negative
+    predicted_cost = max(
+        0,
+        float(predicted_cost)
+    )
+
+    return predicted_cost
+
+
+# ============================================================
+# STEP 3 — FULL PIPELINE TEST
+# ============================================================
+
+TEST_IMAGE = os.path.join(
+    TEST_DIR,
+    "test_car_1.jpg"
+)
+
+image = cv2.imread(TEST_IMAGE)
+
+if image is None:
+    raise FileNotFoundError(
+        f"Could not load image:\n{TEST_IMAGE}"
+    )
+
+image_height, image_width = image.shape[:2]
+
+
+print("=" * 70)
+print("END-TO-END VEHICLE DAMAGE ANALYSIS")
+print("=" * 70)
+
+print(
+    f"Image size: "
+    f"{image_width} × {image_height}"
+)
+
+
+# ============================================================
+# YOLO DETECTION
+# ============================================================
+
+results = yolo_model(
+    image,
+    verbose=False
+)
+
+result = results[0]
+
+boxes = result.boxes
+
+print(f"\nYOLO detections: {len(boxes)}")
+
+
+# ============================================================
+# INITIALIZE RESULTS
+# ============================================================
+
+total_cost = 0.0
+
+predictions = []
+
+
+# ============================================================
+# PROCESS EACH DETECTION
+# ============================================================
+
+for i, box in enumerate(boxes):
+
+    # --------------------------------------------------------
+    # Bounding box
+    # --------------------------------------------------------
+
+    x1, y1, x2, y2 = (
+        np.asarray(
+            box.xyxy[0]
+            .cpu()
+            .numpy()
+        )
+        .astype(int)
+    )
+
+    # --------------------------------------------------------
+    # YOLO confidence
+    # --------------------------------------------------------
+
+    yolo_confidence = float(
+        box.conf[0]
+        .cpu()
+        .numpy()
+    )
+
+    # --------------------------------------------------------
+    # YOLO class
+    # --------------------------------------------------------
+
+    class_id = int(
+        box.cls[0]
+        .cpu()
+        .numpy()
+    )
+
+    part = result.names[class_id]
+
+
+    # --------------------------------------------------------
+    # AUTOMATIC CROP
+    # --------------------------------------------------------
+
+    crop = image[
+        y1:y2,
+        x1:x2
+    ]
+
+    if crop.size == 0:
+        print(
+            f"Skipping detection {i + 1}: "
+            f"empty crop"
+        )
+        continue
+
+
+    # --------------------------------------------------------
+    # SEVERITY PREDICTION
+    # --------------------------------------------------------
+
+    severity, severity_confidence, probabilities = (
+        predict_severity(crop)
+    )
+
+
+    # --------------------------------------------------------
+    # DAMAGE AREA RATIO
+    # --------------------------------------------------------
+
+    damage_area_ratio = calculate_damage_area_ratio(
+        (x1, y1, x2, y2),
+        image_width,
+        image_height
+    )
+
+
+    # --------------------------------------------------------
+    # REPAIR COST PREDICTION
+    # --------------------------------------------------------
+
+    repair_cost = predict_repair_cost(
+        part=part,
+        severity=severity,
+        damage_area_ratio=damage_area_ratio,
+        yolo_confidence=yolo_confidence,
+        severity_confidence=severity_confidence
+    )
+
+    total_cost += repair_cost
+
+
+    # --------------------------------------------------------
+    # STORE RESULT
+    # --------------------------------------------------------
+
+    predictions.append({
+        "part": part,
+        "severity": severity,
+        "yolo_confidence": yolo_confidence,
+        "severity_confidence": severity_confidence,
+        "damage_area_ratio": damage_area_ratio,
+        "repair_cost": repair_cost,
+        "bbox": (x1, y1, x2, y2)
+    })
+
+
+    # --------------------------------------------------------
+    # PRINT RESULT
+    # --------------------------------------------------------
+
+    print(f"\nDamage #{i + 1}")
+
+    print(
+        f"Part                 : {part}"
+    )
+
+    print(
+        f"YOLO confidence      : "
+        f"{yolo_confidence:.3f}"
+    )
+
+    print(
+        f"Severity             : "
+        f"{severity}"
+    )
+
+    print(
+        f"Severity confidence  : "
+        f"{severity_confidence:.3f}"
+    )
+
+    print(
+        f"Damage area ratio    : "
+        f"{damage_area_ratio:.4f}"
+    )
+
+    print(
+        f"Estimated repair cost: "
+        f"₹{repair_cost:,.2f}"
+    )
+
+    print(
+        f"Bounding box         : "
+        f"{(x1, y1, x2, y2)}"
+    )
+
+
+# ============================================================
+# FINAL TOTAL
+# ============================================================
+
+print("\n" + "=" * 70)
+
+print(
+    f"TOTAL ESTIMATED REPAIR COST: "
+    f"₹{total_cost:,.2f}"
+)
+
+print("=" * 70)
+--------------------
