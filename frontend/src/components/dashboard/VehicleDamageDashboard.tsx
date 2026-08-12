@@ -15,6 +15,7 @@ import {
 import { Panel, SimBadge } from "./Panel";
 import { Stepper } from "./Stepper";
 
+import { ThreeSixtyLogo } from "./ThreeSixtyLogo";
 import { Vehicle3D } from "@/components/vehicle/Vehicle3D";
 import { DEMO_DATA, type VehicleDamageData } from "@/lib/vehicle-damage";
 
@@ -87,8 +88,8 @@ export function VehicleDamageDashboard({
             <Boxes size={20} className="text-[#050914]" />
           </div>
           <div>
-            <h1 className="text-base font-extrabold tracking-tight">
-              VEHICLE <span className="text-cyan-400">DAMAGE AI</span>
+            <h1 className="text-base font-extrabold tracking-tight flex items-center gap-1">
+              CarCheckUp <ThreeSixtyLogo className="h-5 w-auto text-cyan-400 mt-0.5" />
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
               AI-powered damage assessment &amp; repair estimation
