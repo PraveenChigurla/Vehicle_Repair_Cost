@@ -8,5 +8,5 @@ onnxruntime
 tflite-runtime
 scikit-learn==1.5.2
 xgboost==2.0.3
-pandas==3.0.3
+pandas
 joblib==1.4.2
