@@ -17,7 +17,7 @@ import { Stepper } from "./Stepper";
 
 import { ThreeSixtyLogo } from "./ThreeSixtyLogo";
 import { Vehicle3D } from "@/components/vehicle/Vehicle3D";
-import { DEMO_DATA, type VehicleDamageData } from "@/lib/vehicle-damage";
+import { EMPTY_DATA, type VehicleDamageData } from "@/lib/vehicle-damage";
 
 const SCAN_STAGES = [
   "Image Uploaded",
@@ -29,7 +29,7 @@ const SCAN_STAGES = [
 ];
 
 export function VehicleDamageDashboard({ 
-  data = DEMO_DATA, 
+  data = EMPTY_DATA, 
   stage = "report",
   imageUrl = null,
   onUpload

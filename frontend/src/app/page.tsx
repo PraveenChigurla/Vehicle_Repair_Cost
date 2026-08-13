@@ -3,13 +3,13 @@
 import React, { useState } from "react";
 import { VehicleDamageDashboard } from "@/components/dashboard/VehicleDamageDashboard";
 import { analyzeVehicleImage } from "@/lib/api";
-import { DEMO_DATA, VehicleDamageData, DamagePart } from "@/lib/vehicle-damage";
+import { EMPTY_DATA, VehicleDamageData, DamagePart } from "@/lib/vehicle-damage";
 
 export type PipelineStage = "upload" | "scanning" | "report";
 
 export default function Home() {
   const [stage, setStage] = useState<PipelineStage>("upload");
-  const [vehicleData, setVehicleData] = useState<VehicleDamageData>(DEMO_DATA);
+  const [vehicleData, setVehicleData] = useState<VehicleDamageData>(EMPTY_DATA);
   const [error, setError] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
@@ -78,7 +78,7 @@ export default function Home() {
         setError("Failed to analyze image");
       }
       setStage("upload");
-      setVehicleData(DEMO_DATA);
+      setVehicleData(EMPTY_DATA);
     }
   };
 
@@ -92,7 +92,7 @@ export default function Home() {
         </div>
       )}
       <VehicleDamageDashboard 
-        data={stage === 'upload' ? DEMO_DATA : vehicleData} 
+        data={stage === 'upload' ? EMPTY_DATA : vehicleData} 
         stage={stage} 
         imageUrl={uploadedImageUrl}
         onUpload={handleUpload} 

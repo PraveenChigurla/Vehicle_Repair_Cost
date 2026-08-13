@@ -68,43 +68,15 @@ export interface VehicleDamageData {
  * DEMO DATA — local development fallback only. Never presented as a
  * real model output (`isLive` stays false, UI labels it as simulated).
  * ------------------------------------------------------------------ */
-export const DEMO_DATA: VehicleDamageData = {
-  analysisId: "VD-250525-001",
-  timestamp: "02:48:25 PM",
-  vehicle: { make: "Generic", model: "Sedan", year: 2018, plate: "ASB042", mileageKm: 87312 },
-  parts: [
-    {
-      part: "Windshield",
-      severity: "Moderate",
-      yoloConf: 78.5,
-      severityConf: 63.7,
-      areaRatio: 12.5,
-      estimate: 3692.41,
-      vehicleZone: "windshield",
-    },
-    {
-      part: "Fender",
-      severity: "Severe",
-      yoloConf: 37.3,
-      severityConf: 88.6,
-      areaRatio: 13.8,
-      estimate: 9551.98,
-      vehicleZone: "front-right-fender",
-    },
-    {
-      part: "Light",
-      severity: "Severe",
-      yoloConf: 34.9,
-      severityConf: 95.9,
-      areaRatio: 1.6,
-      estimate: 3295.37,
-      vehicleZone: "front-right-headlight",
-    },
-  ],
-  costBreakdown: { parts: 10420.5, labor: 4980.2, paint: 1139.06 },
-  confidence: { detection: 62, severity: 81, estimate: 75 },
-  scanAccuracy: 92.4,
-  processSeconds: 8.42,
+export const EMPTY_DATA: VehicleDamageData = {
+  analysisId: "---",
+  timestamp: "--:--",
+  vehicle: { make: "---", model: "---", year: 0, plate: "---", mileageKm: 0 },
+  parts: [],
+  costBreakdown: { parts: 0, labor: 0, paint: 0 },
+  confidence: { detection: 0, severity: 0, estimate: 0 },
+  scanAccuracy: 0,
+  processSeconds: 0,
   isLive: false,
 };
 
