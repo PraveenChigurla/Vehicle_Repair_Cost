@@ -5,7 +5,7 @@ pydantic
 pydantic-settings
 opencv-python-headless
 onnxruntime
-tflite-runtime
+tensorflow-cpu
 scikit-learn==1.5.2
 xgboost==2.0.3
 pandas
