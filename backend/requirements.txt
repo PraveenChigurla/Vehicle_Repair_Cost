@@ -4,8 +4,8 @@ python-multipart
 pydantic
 pydantic-settings
 opencv-python-headless
-ultralytics
-tensorflow
+onnxruntime
+tflite-runtime
 scikit-learn
 xgboost
 pandas

@@ -5,8 +5,8 @@ class Settings(BaseSettings):
     api_url: str = "http://localhost:8000"
     project_root: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     
-    yolo_model_path: str = os.path.join(project_root, "models", "yolo_best.pt")
-    severity_model_path: str = os.path.join(project_root, "models", "severity_efficientnet_v4.keras")
+    yolo_model_path: str = os.path.join(project_root, "models", "yolo_best.onnx")
+    severity_model_path: str = os.path.join(project_root, "models", "severity_efficientnet_v4.tflite")
     cost_model_path: str = os.path.join(project_root, "models", "repair_cost_xgboost_v3.joblib")
     
     output_dir: str = os.path.join(project_root, "backend", "outputs")
