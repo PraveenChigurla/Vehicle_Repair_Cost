@@ -24,18 +24,21 @@ async def lifespan(app: FastAPI):
         services["yolo"] = yolo_service
     except Exception as e:
         print(f"Failed to load YOLO model: {e}")
+        services["yolo_error"] = str(e)
         
     try:
         severity_service = SeverityService(settings.severity_model_path)
         services["severity"] = severity_service
     except Exception as e:
         print(f"Failed to load Severity model: {e}")
+        services["severity_error"] = str(e)
         
     try:
         cost_service = CostService(settings.cost_model_path)
         services["cost"] = cost_service
     except Exception as e:
         print(f"Failed to load Cost model: {e}")
+        services["cost_error"] = str(e)
         
     if "yolo" in services and "severity" in services and "cost" in services:
         services["pipeline"] = PipelineService(
@@ -72,8 +75,11 @@ def health_check():
     return {
         "status": "healthy" if "pipeline" in services else "unhealthy",
         "yolo": "yolo" in services,
+        "yolo_error": services.get("yolo_error"),
         "severity_model": "severity" in services,
-        "cost_model": "cost" in services
+        "severity_error": services.get("severity_error"),
+        "cost_model": "cost" in services,
+        "cost_error": services.get("cost_error")
     }
 
 @app.post("/analyze", response_model=AnalysisResponse)

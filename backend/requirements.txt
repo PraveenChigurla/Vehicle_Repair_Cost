@@ -6,7 +6,7 @@ pydantic-settings
 opencv-python-headless
 onnxruntime
 tflite-runtime
-scikit-learn
-xgboost
-pandas
-joblib
+scikit-learn==1.5.2
+xgboost==2.0.3
+pandas==3.0.3
+joblib==1.4.2
